@@ -1,0 +1,20 @@
+# Environments
+.env
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database and sessions
+data/database.db
+data/backups/
+data/sessions/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

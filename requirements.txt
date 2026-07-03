@@ -1,0 +1,14 @@
+telethon
+python-telegram-bot
+aiosqlite
+openai
+google-generativeai
+anthropic
+cryptography
+python-dotenv
+aiofiles
+apscheduler
+pydantic
+loguru
+httpx
+Pillow
