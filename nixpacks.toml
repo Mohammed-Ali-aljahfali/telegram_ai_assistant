@@ -1,0 +1,11 @@
+# nixpacks.toml — إعدادات بناء Railway
+# يحدد إصدار Python والأوامر اللازمة للبناء
+
+[phases.setup]
+nixPkgs = ["python311", "gcc"]
+
+[phases.install]
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+
+[start]
+cmd = "python main.py"

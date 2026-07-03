@@ -19,7 +19,7 @@ def build_application() -> Application:
     # ─── Import handlers ─────────────────────────────────────────
     from bot.handlers.start_handler import (
         start, handle_main_menu_callback, get_auth_conversation_handler,
-        verify_subscription
+        get_resend_command_handler, verify_subscription
     )
     from bot.handlers.stats_handler import (
         handle_stats_menu, handle_today_stats, handle_weekly_stats, handle_monthly_stats
@@ -68,8 +68,11 @@ def build_application() -> Application:
                 await update.message.reply_text(BANNED_MESSAGE)
             return
 
-    # ─── /start command ───────────────────────────────────────────
+    # ─── /start command ────────────────────────────────────────────
     app.add_handler(CommandHandler("start", start))
+
+    # /resend_code — يعمل خارج ConversationHandler أيضاً
+    app.add_handler(get_resend_command_handler())
 
     # ─── Login ConversationHandler ────────────────────────────────
     app.add_handler(get_auth_conversation_handler())

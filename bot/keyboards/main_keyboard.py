@@ -83,7 +83,16 @@ def get_phone_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def get_code_actions_keyboard() -> InlineKeyboardMarkup:
+    """لوحة مفاتيح أثناء انتظار رمز التحقق — تشمل إعادة الإرسال والإلغاء."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 إعادة إرسال الرمز", callback_data="resend_code")],
+        [InlineKeyboardButton("❌ إلغاء تسجيل الدخول", callback_data="cancel_login")],
+    ])
+
+
 def get_login_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("🔐 تسجيل الدخول", callback_data="start_login"),
     ]])
+

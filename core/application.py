@@ -18,6 +18,10 @@ class TelegramAIApplication:
         """تهيئة جميع مكونات النظام"""
         logger.info("🚀 تهيئة المساعد الذكي...")
 
+        # 0. فحوصات سلامة التخزين — يجب أن تكون أول شيء
+        from infrastructure.startup_checks import run_startup_checks
+        await run_startup_checks()
+
         # 1. التحقق من الإعدادات
         errors = config.validate()
         if errors:
@@ -30,6 +34,7 @@ class TelegramAIApplication:
         self.db = get_db()
         await self.db.initialize()
         logger.info("✅ قاعدة البيانات جاهزة")
+
 
         # 3. بناء تطبيق البوت
         from bot.bot_app import build_application

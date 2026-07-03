@@ -4,7 +4,7 @@ from infrastructure.logger import get_logger
 
 logger = get_logger("migrations")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS = [
     # Migration 1: الإنشاء الأولي
@@ -205,12 +205,34 @@ MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_stats_user_date ON statistics(bot_user_id, date);
     CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at);
     CREATE INDEX IF NOT EXISTS idx_ai_memory_customer ON ai_memory(customer_id);
+    """,
+
+    # Migration 2: جدول جلسات تسجيل الدخول الجارية (Login State Machine)
+    """
+    CREATE TABLE IF NOT EXISTS login_sessions (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        bot_user_id     INTEGER UNIQUE NOT NULL,
+        phone           TEXT NOT NULL,
+        phone_code_hash TEXT NOT NULL,
+        session_string  TEXT,
+        login_state     TEXT DEFAULT 'WAIT_CODE',
+        code_sent_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at      DATETIME,
+        attempt_count   INTEGER DEFAULT 0,
+        resend_count    INTEGER DEFAULT 0,
+        last_error      TEXT,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_login_sessions_user ON login_sessions(bot_user_id);
+    CREATE INDEX IF NOT EXISTS idx_login_sessions_state ON login_sessions(login_state);
     """
 ]
 
 
 async def run_migrations(db_path: str):
-    """تشغيل الـ migrations"""
+    """تشغيل الـ migrations مع نسخة احتياطية تلقائية قبل أي تغيير."""
     async with aiosqlite.connect(db_path) as conn:
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA foreign_keys=ON")
@@ -226,18 +248,37 @@ async def run_migrations(db_path: str):
         row = await cursor.fetchone()
         current_version = row[0] or 0
 
-        # تطبيق الـ migrations الجديدة
-        for i, migration in enumerate(MIGRATIONS, start=1):
-            if i > current_version:
-                logger.info(f"🔄 تطبيق migration {i}...")
-                for statement in migration.strip().split(";"):
-                    stmt = statement.strip()
-                    if stmt:
-                        await conn.execute(stmt)
-                await conn.execute(
-                    "INSERT INTO schema_version (version) VALUES (?)", (i,)
-                )
-                await conn.commit()
-                logger.info(f"✅ Migration {i} طُبِّق")
+        # تحديد الـ migrations الجديدة المطلوب تطبيقها
+        pending = [
+            (i, m) for i, m in enumerate(MIGRATIONS, start=1)
+            if i > current_version
+        ]
 
-        logger.info(f"✅ قاعدة البيانات محدّثة (إصدار {len(MIGRATIONS)})")
+        if not pending:
+            logger.info("✅ قاعدة البيانات محدّثة (إصدار %d)", current_version)
+            return
+
+        # نسخة احتياطية قبل أي migration جديد
+        try:
+            from infrastructure.startup_checks import backup_before_migration
+            backup_path = await backup_before_migration()
+            if backup_path:
+                logger.info("💾 نسخة احتياطية قبل Migration: %s", backup_path.name)
+        except Exception as exc:
+            logger.warning("تعذّر إنشاء نسخة احتياطية قبل Migration: %s", exc)
+
+        # تطبيق الـ migrations الجديدة
+        for i, migration in pending:
+            logger.info("🔄 تطبيق migration %d...", i)
+            for statement in migration.strip().split(";"):
+                stmt = statement.strip()
+                if stmt:
+                    await conn.execute(stmt)
+            await conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?)", (i,)
+            )
+            await conn.commit()
+            logger.info("✅ Migration %d طُبِّق", i)
+
+        logger.info("✅ قاعدة البيانات محدّثة (إصدار %d)", len(MIGRATIONS))
+
