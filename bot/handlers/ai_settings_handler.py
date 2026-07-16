@@ -117,14 +117,14 @@ async def handle_set_api_key_start(update: Update, context: ContextTypes.DEFAULT
 # ✅ تنسيقات المفاتيح الصحيحة لكل مزود
 _KEY_HINTS = {
     "openai":  ("sk-",),
-    "gemini":  ("AIzaSy",),
+    "gemini":  ("AIzaSy", "AQ."),   # Google تدعم تنسيقين للمفاتيح
     "claude":  ("sk-ant-",),
     "local":   (),   # لا يوجد تحقق للنماذج المحلية
 }
 
 _KEY_EXAMPLES = {
     "openai": "sk-proj-xxxx... أو sk-xxxx...",
-    "gemini": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "gemini": "AIzaSyXXXX... أو AQ.AbXXXX... (Google AI Studio)",
     "claude": "sk-ant-api03-xxxx...",
 }
 
