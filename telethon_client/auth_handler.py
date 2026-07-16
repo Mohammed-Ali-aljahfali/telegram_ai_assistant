@@ -542,6 +542,29 @@ class TelethonAuthHandler:
             )
 
         # ✅ تسجيل الدخول ناجح
+        try:
+            me = await client.get_me()
+            if me and me.id != bot_user_id:
+                logger.warning(
+                    "verify_code | ownership mismatch: user_id=%s, logged_in_id=%s",
+                    bot_user_id,
+                    me.id,
+                )
+                await self._safe_disconnect(client)
+                self._temp_clients.pop(bot_user_id, None)
+                await self._repo.delete(bot_user_id)
+                return AuthResult(
+                    success=False,
+                    state=LoginState.FAILED,
+                    message=(
+                        "❌ فشل تسجيل الدخول: الحساب غير متطابق.\n"
+                        "يجب عليك تسجيل الدخول باستخدام نفس حساب Telegram "
+                        "الذي تراسل البوت منه حالياً لمنع إساءة الاستخدام."
+                    ),
+                )
+        except Exception as exc:
+            logger.error("verify_code | failed to verify owner | user=%s | error=%s", bot_user_id, exc)
+
         session = client.session.save()
         await self._safe_disconnect(client)
         self._temp_clients.pop(bot_user_id, None)
@@ -629,6 +652,29 @@ class TelethonAuthHandler:
             )
 
         # ✅ نجاح 2FA
+        try:
+            me = await client.get_me()
+            if me and me.id != bot_user_id:
+                logger.warning(
+                    "verify_2fa | ownership mismatch: user_id=%s, logged_in_id=%s",
+                    bot_user_id,
+                    me.id,
+                )
+                await self._safe_disconnect(client)
+                self._temp_clients.pop(bot_user_id, None)
+                await self._repo.delete(bot_user_id)
+                return AuthResult(
+                    success=False,
+                    state=LoginState.FAILED,
+                    message=(
+                        "❌ فشل تسجيل الدخول: الحساب غير متطابق.\n"
+                        "يجب عليك تسجيل الدخول باستخدام نفس حساب Telegram "
+                        "الذي تراسل البوت منه حالياً لمنع إساءة الاستخدام."
+                    ),
+                )
+        except Exception as exc:
+            logger.error("verify_2fa | failed to verify owner | user=%s | error=%s", bot_user_id, exc)
+
         session = client.session.save()
         await self._safe_disconnect(client)
         self._temp_clients.pop(bot_user_id, None)
