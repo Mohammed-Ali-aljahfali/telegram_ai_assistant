@@ -32,19 +32,28 @@ class GeminiProvider(BaseAIProvider):
             import asyncio
 
             genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel(
-                self.model,
-                system_instruction=system_prompt or "",
+
+            # system_instruction يجب أن لا يكون فارغاً — Gemini ترفض القيم الفارغة
+            sys_instruction = (system_prompt or "").strip() or None
+
+            model_kwargs = dict(
                 generation_config=genai.GenerationConfig(
                     temperature=temperature,
                     max_output_tokens=max_tokens,
                 )
             )
-            # تحويل رسائل OpenAI format لـ Gemini بطريقة تضمن التناوب السليم والبدء بـ user
+            if sys_instruction:
+                model_kwargs["system_instruction"] = sys_instruction
+
+            model = genai.GenerativeModel(self.model, **model_kwargs)
+
+            # تحويل رسائل OpenAI format لـ Gemini مع ضمان التناوب الصحيح والبدء بـ user
             raw_history = []
             for msg in messages:
                 role = "user" if msg["role"] == "user" else "model"
-                content = msg["content"]
+                content = (msg.get("content") or "").strip()
+                if not content:          # تخطي الرسائل الفارغة تماماً
+                    continue
                 if raw_history and raw_history[-1]["role"] == role:
                     # دمج الرسائل المتتالية من نفس الطرف
                     raw_history[-1]["parts"][0] += f"\n{content}"
@@ -60,10 +69,21 @@ class GeminiProvider(BaseAIProvider):
             if raw_history and raw_history[-1]["role"] == "user":
                 last_user_msg = raw_history.pop()["parts"][0]
 
+            # التحقق النهائي: لا نرسل محتوى فارغاً أبداً إلى Gemini
+            send_content = last_user_msg.strip()
+            if not send_content:
+                # بحث احتياطي في قائمة الرسائل الأصلية
+                for msg in reversed(messages):
+                    if msg.get("role") == "user" and (msg.get("content") or "").strip():
+                        send_content = msg["content"].strip()
+                        break
+            if not send_content:
+                send_content = "مرحبا"
+
             chat = model.start_chat(history=raw_history)
-            send_content = last_user_msg or (messages[-1]["content"] if messages else "مرحبا")
             response = await asyncio.to_thread(chat.send_message, send_content)
             return response.text.strip()
+
         except Exception as e:
             logger.error(f"Gemini error: {e}")
             raise
@@ -82,7 +102,7 @@ class GeminiProvider(BaseAIProvider):
             return {"raw": result}
 
     def get_available_models(self) -> list[str]:
-        return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"]
+        return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
     async def test_connection(self) -> bool:
         try:
