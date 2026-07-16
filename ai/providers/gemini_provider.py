@@ -40,20 +40,29 @@ class GeminiProvider(BaseAIProvider):
                     max_output_tokens=max_tokens,
                 )
             )
-            # تحويل رسائل OpenAI format لـ Gemini
-            history = []
-            last_user_msg = ""
+            # تحويل رسائل OpenAI format لـ Gemini بطريقة تضمن التناوب السليم والبدء بـ user
+            raw_history = []
             for msg in messages:
                 role = "user" if msg["role"] == "user" else "model"
-                if msg["role"] == "user":
-                    last_user_msg = msg["content"]
-                    if history:
-                        history.append({"role": role, "parts": [msg["content"]]})
+                content = msg["content"]
+                if raw_history and raw_history[-1]["role"] == role:
+                    # دمج الرسائل المتتالية من نفس الطرف
+                    raw_history[-1]["parts"][0] += f"\n{content}"
                 else:
-                    history.append({"role": role, "parts": [msg["content"]]})
+                    raw_history.append({"role": role, "parts": [content]})
 
-            chat = model.start_chat(history=history[:-1] if history else [])
-            response = await asyncio.to_thread(chat.send_message, last_user_msg or messages[-1]["content"])
+            # يجب أن تبدأ المحادثة دائماً بـ user في Gemini
+            while raw_history and raw_history[0]["role"] != "user":
+                raw_history.pop(0)
+
+            # سحب آخر رسالة للمستخدم لإرسالها مع send_message
+            last_user_msg = ""
+            if raw_history and raw_history[-1]["role"] == "user":
+                last_user_msg = raw_history.pop()["parts"][0]
+
+            chat = model.start_chat(history=raw_history)
+            send_content = last_user_msg or (messages[-1]["content"] if messages else "مرحبا")
+            response = await asyncio.to_thread(chat.send_message, send_content)
             return response.text.strip()
         except Exception as e:
             logger.error(f"Gemini error: {e}")

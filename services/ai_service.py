@@ -11,6 +11,17 @@ from infrastructure.logger import get_logger
 logger = get_logger("ai_service")
 
 
+def _decrypt_key_safely(value: Optional[str]) -> Optional[str]:
+    """فك تشفير مفتاح الـ API بشكل آمن إذا كان مشفراً، أو إرجاعه كما هو."""
+    if not value:
+        return None
+    from infrastructure.crypto import decrypt_text
+    decrypted = decrypt_text(value)
+    if decrypted:
+        return decrypted
+    return value
+
+
 class AIService:
     """الخدمة المركزية للذكاء الاصطناعي"""
 
@@ -28,19 +39,22 @@ class AIService:
 
         from config import config
         if provider_name == "openai":
-            api_key = await self.settings_repo.get("openai_api_key", bot_user_id) or config.OPENAI_API_KEY
+            db_key = await self.settings_repo.get("openai_api_key", bot_user_id)
+            api_key = _decrypt_key_safely(db_key) or config.OPENAI_API_KEY
             if api_key:
                 provider = OpenAIProvider(api_key, model or "gpt-4o-mini")
                 self._providers[bot_user_id] = provider
                 return provider
         elif provider_name == "gemini":
-            api_key = await self.settings_repo.get("gemini_api_key", bot_user_id) or config.GEMINI_API_KEY
+            db_key = await self.settings_repo.get("gemini_api_key", bot_user_id)
+            api_key = _decrypt_key_safely(db_key) or config.GEMINI_API_KEY
             if api_key:
                 provider = GeminiProvider(api_key, model or "gemini-1.5-flash")
                 self._providers[bot_user_id] = provider
                 return provider
         elif provider_name == "claude":
-            api_key = await self.settings_repo.get("claude_api_key", bot_user_id) or config.CLAUDE_API_KEY
+            db_key = await self.settings_repo.get("claude_api_key", bot_user_id)
+            api_key = _decrypt_key_safely(db_key) or config.CLAUDE_API_KEY
             if api_key:
                 provider = ClaudeProvider(api_key, model or "claude-3-haiku-20240307")
                 self._providers[bot_user_id] = provider

@@ -61,6 +61,13 @@ class MessageRepository:
             "UPDATE messages SET ai_analyzed=1 WHERE id=?", (message_id,)
         )
 
+    async def update_analysis(self, message_id: int, intent: Optional[str], sentiment: Optional[str], is_important: bool):
+        await self.db.execute(
+            """UPDATE messages SET intent=?, sentiment=?, is_important=?, ai_analyzed=1
+               WHERE id=?""",
+            (intent, sentiment, 1 if is_important else 0, message_id)
+        )
+
     async def get_unanalyzed(self, limit: int = 50) -> list[Message]:
         rows = await self.db.fetchall(
             "SELECT * FROM messages WHERE ai_analyzed=0 ORDER BY created_at ASC LIMIT ?",

@@ -28,11 +28,29 @@ class ClaudeProvider(BaseAIProvider):
     ) -> str:
         try:
             client = self._get_client()
+
+            # دمج الرسائل المتتالية من نفس الطرف لـ Claude
+            formatted_messages = []
+            for msg in messages:
+                role = "user" if msg["role"] == "user" else "assistant"
+                content = msg["content"]
+                if formatted_messages and formatted_messages[-1]["role"] == role:
+                    formatted_messages[-1]["content"] += f"\n{content}"
+                else:
+                    formatted_messages.append({"role": role, "content": content})
+
+            # يجب أن تبدأ المحادثة دائماً بـ user في Claude
+            while formatted_messages and formatted_messages[0]["role"] != "user":
+                formatted_messages.pop(0)
+
+            if not formatted_messages:
+                formatted_messages = [{"role": "user", "content": "مرحبا"}]
+
             response = await client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 system=system_prompt or "أنت مساعد ذكي محترف.",
-                messages=messages,
+                messages=formatted_messages,
                 temperature=temperature,
             )
             return response.content[0].text.strip()
