@@ -78,6 +78,14 @@ class AIService:
         provider = await self.get_provider(bot_user_id)
         if not provider:
             return None
+        # ✅ تصفية الرسائل الفارغة قبل الإرسال
+        messages = [
+            m for m in (messages or [])
+            if isinstance(m.get("content"), str) and m["content"].strip()
+        ]
+        if not messages:
+            logger.warning("generate_response called with empty messages list for user=%s", bot_user_id)
+            return None
         if not system_prompt:
             system_prompt = await self.prompt_manager.get_system_prompt(bot_user_id)
         temp = await self.settings_repo.get("ai_temperature", bot_user_id)
@@ -88,6 +96,9 @@ class AIService:
         provider = await self.get_provider(bot_user_id)
         if not provider:
             return {}
+        # ✅ لا تُحلل نصاً فارغاً
+        if not (text or "").strip():
+            return {}
         task = await self.prompt_manager.get_analysis_prompt()
         return await provider.analyze_text(text, task)
 
@@ -96,8 +107,12 @@ class AIService:
             provider = await self.get_provider(bot_user_id)
             if not provider:
                 return False, "❌ لم يتم تعيين مزود AI. أضف API Key أولاً."
+            # ✅ تمرير system_prompt=None و temperature=0.7 و max_tokens=100 بشكل صريح
             response = await provider.generate_response(
-                [{"role": "user", "content": test_message}], max_tokens=100
+                [{"role": "user", "content": test_message or "مرحبا"}],
+                system_prompt=None,
+                temperature=0.7,
+                max_tokens=100,
             )
             return True, f"✅ الذكاء الاصطناعي يعمل!\n\n*الرد:*\n{response}"
         except Exception as e:

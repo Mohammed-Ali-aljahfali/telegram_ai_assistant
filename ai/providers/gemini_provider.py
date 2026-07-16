@@ -6,6 +6,19 @@ from infrastructure.logger import get_logger
 logger = get_logger("ai.gemini")
 
 
+def _clean_parts(history: list[dict]) -> list[dict]:
+    """
+    تنظيف تاريخ المحادثة من أي parts فارغة تماماً.
+    Gemini API ترفض أي parts تحتوي على نص فارغ أو مسافات فقط.
+    """
+    clean = []
+    for turn in history:
+        parts = [p for p in turn.get("parts", []) if isinstance(p, str) and p.strip()]
+        if parts:
+            clean.append({"role": turn["role"], "parts": parts})
+    return clean
+
+
 class GeminiProvider(BaseAIProvider):
 
     def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
@@ -33,52 +46,62 @@ class GeminiProvider(BaseAIProvider):
 
             genai.configure(api_key=self.api_key)
 
-            # system_instruction يجب أن لا يكون فارغاً — Gemini ترفض القيم الفارغة
+            # ✅ system_instruction يجب أن يكون غير فارغ أو لا يُرسل أبداً
             sys_instruction = (system_prompt or "").strip() or None
 
-            model_kwargs = dict(
-                generation_config=genai.GenerationConfig(
+            model_kwargs: dict = {
+                "generation_config": genai.GenerationConfig(
                     temperature=temperature,
                     max_output_tokens=max_tokens,
                 )
-            )
+            }
             if sys_instruction:
                 model_kwargs["system_instruction"] = sys_instruction
 
             model = genai.GenerativeModel(self.model, **model_kwargs)
 
-            # تحويل رسائل OpenAI format لـ Gemini مع ضمان التناوب الصحيح والبدء بـ user
-            raw_history = []
+            # ✅ تحويل رسائل OpenAI format لـ Gemini مع ضمان التناوب الصحيح
+            raw_history: list[dict] = []
             for msg in messages:
-                role = "user" if msg["role"] == "user" else "model"
+                role = "user" if msg.get("role") == "user" else "model"
                 content = (msg.get("content") or "").strip()
-                if not content:          # تخطي الرسائل الفارغة تماماً
+                if not content:
+                    # ✅ تخطي الرسائل الفارغة كلياً
                     continue
                 if raw_history and raw_history[-1]["role"] == role:
-                    # دمج الرسائل المتتالية من نفس الطرف
-                    raw_history[-1]["parts"][0] += f"\n{content}"
+                    # دمج رسائل متتالية من نفس الطرف
+                    existing = raw_history[-1]["parts"][0].strip()
+                    raw_history[-1]["parts"][0] = f"{existing}\n{content}" if existing else content
                 else:
                     raw_history.append({"role": role, "parts": [content]})
 
-            # يجب أن تبدأ المحادثة دائماً بـ user في Gemini
+            # ✅ يجب أن تبدأ المحادثة دائماً بـ user في Gemini
             while raw_history and raw_history[0]["role"] != "user":
                 raw_history.pop(0)
 
-            # سحب آخر رسالة للمستخدم لإرسالها مع send_message
+            # ✅ سحب آخر رسالة للمستخدم لإرسالها عبر send_message
             last_user_msg = ""
             if raw_history and raw_history[-1]["role"] == "user":
-                last_user_msg = raw_history.pop()["parts"][0]
+                last_user_msg = raw_history.pop()["parts"][0].strip()
 
-            # التحقق النهائي: لا نرسل محتوى فارغاً أبداً إلى Gemini
-            send_content = last_user_msg.strip()
+            # ✅ تنظيف نهائي للتاريخ من أي parts فارغة
+            raw_history = _clean_parts(raw_history)
+
+            # ✅ التحقق المزدوج من أن رسالة الإرسال ليست فارغة
+            send_content = last_user_msg
             if not send_content:
-                # بحث احتياطي في قائمة الرسائل الأصلية
                 for msg in reversed(messages):
-                    if msg.get("role") == "user" and (msg.get("content") or "").strip():
-                        send_content = msg["content"].strip()
+                    candidate = (msg.get("content") or "").strip()
+                    if msg.get("role") == "user" and candidate:
+                        send_content = candidate
                         break
             if not send_content:
                 send_content = "مرحبا"
+
+            logger.debug(
+                "Gemini send | history_turns=%d | content_len=%d",
+                len(raw_history), len(send_content)
+            )
 
             chat = model.start_chat(history=raw_history)
             response = await asyncio.to_thread(chat.send_message, send_content)
@@ -90,6 +113,13 @@ class GeminiProvider(BaseAIProvider):
 
     async def analyze_text(self, text: str, task: str) -> dict:
         import json
+        # ✅ التحقق من أن النص والمهمة غير فارغين
+        text = (text or "").strip()
+        task = (task or "").strip()
+        if not text or not task:
+            logger.warning("analyze_text called with empty text or task")
+            return {}
+
         result = await self.generate_response(
             [{"role": "user", "content": f"مهمتك: {task}\n\nالنص:\n{text}\n\nأجب بـ JSON فقط."}],
             temperature=0.3, max_tokens=500
