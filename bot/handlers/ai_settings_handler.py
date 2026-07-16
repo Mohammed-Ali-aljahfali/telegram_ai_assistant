@@ -76,14 +76,27 @@ async def handle_select_provider(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
+# النموذج الافتراضي لكل مزود
+_DEFAULT_MODELS = {
+    "openai": "gpt-4o-mini",
+    "gemini": "gemini-1.5-flash",
+    "claude": "claude-3-haiku-20240307",
+    "local": "llama3",
+}
+
 async def handle_set_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     provider = query.data.split("_")[-1]   # openai | gemini | claude | local
     user_id = update.effective_user.id
+
+    # ✅ حفظ المزود وإعادة تعيين النموذج الافتراضي الصحيح
     await settings_service.set("ai_provider", provider, user_id)
+    default_model = _DEFAULT_MODELS.get(provider, "gemini-1.5-flash")
+    await settings_service.set("ai_model", default_model, user_id)
     ai_service.clear_provider_cache(user_id)
-    await query.answer(f"✅ تم اختيار {provider}", show_alert=True)
+
+    await query.answer(f"✅ تم اختيار {provider} | النموذج: {default_model}", show_alert=True)
     await handle_ai_menu(update, context)
 
 

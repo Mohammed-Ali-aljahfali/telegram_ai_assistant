@@ -37,6 +37,26 @@ class AIService:
         provider_name = await self.settings_repo.get("ai_provider", bot_user_id) or "openai"
         model = await self.settings_repo.get("ai_model", bot_user_id)
 
+        # ✅ النماذج الافتراضية الصحيحة لكل مزود
+        _defaults = {
+            "openai": "gpt-4o-mini",
+            "gemini": "gemini-1.5-flash",
+            "claude": "claude-3-haiku-20240307",
+        }
+        # ✅ إذا كان النموذج لا ينتمي للمزود المختار نستخدم الافتراضي فوراً
+        _valid_prefixes = {
+            "openai": ("gpt", "o1", "o3"),
+            "gemini": ("gemini",),
+            "claude": ("claude",),
+        }
+        if model and provider_name in _valid_prefixes:
+            if not any(model.startswith(p) for p in _valid_prefixes[provider_name]):
+                logger.warning(
+                    "Model '%s' is invalid for provider '%s', resetting to default",
+                    model, provider_name
+                )
+                model = None  # سيُستخدم الافتراضي
+
         from config import config
         if provider_name == "openai":
             db_key = await self.settings_repo.get("openai_api_key", bot_user_id)
