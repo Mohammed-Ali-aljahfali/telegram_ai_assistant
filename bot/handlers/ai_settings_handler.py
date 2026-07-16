@@ -114,20 +114,70 @@ async def handle_set_api_key_start(update: Update, context: ContextTypes.DEFAULT
     return WAITING_API_KEY
 
 
+# ✅ تنسيقات المفاتيح الصحيحة لكل مزود
+_KEY_HINTS = {
+    "openai":  ("sk-",),
+    "gemini":  ("AIzaSy",),
+    "claude":  ("sk-ant-",),
+    "local":   (),   # لا يوجد تحقق للنماذج المحلية
+}
+
+_KEY_EXAMPLES = {
+    "openai": "sk-proj-xxxx... أو sk-xxxx...",
+    "gemini": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "claude": "sk-ant-api03-xxxx...",
+}
+
+
 async def handle_api_key_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    api_key = update.message.text.strip()
+    api_key = (update.message.text or "").strip()
     user_id = update.effective_user.id
     provider = context.user_data.get("ai_key_provider", "openai")
 
+    # ✅ التحقق من عدم إدخال مفتاح فارغ
+    if not api_key:
+        await update.message.reply_text(
+            "❌ المفتاح لا يمكن أن يكون فارغاً. أرسل المفتاح مجدداً:",
+            reply_markup=get_back_button("ai_menu")
+        )
+        return WAITING_API_KEY
+
+    # ✅ التحقق من تنسيق المفتاح (تحذير فقط، ليس منعاً)
+    prefixes = _KEY_HINTS.get(provider, ())
+    format_warning = ""
+    if prefixes and not any(api_key.startswith(p) for p in prefixes):
+        example = _KEY_EXAMPLES.get(provider, "")
+        format_warning = (
+            f"\n\n⚠️ *تحذير:* تنسيق المفتاح يبدو غير صحيح لـ {provider}.\n"
+            f"المفتاح الصحيح يبدأ بـ: `{prefixes[0]}`\n"
+            f"مثال: `{example}`\n"
+            f"تأكد من نسخ المفتاح الصحيح من لوحة تحكم {provider}."
+        )
+
+    # ✅ حفظ المفتاح
     from infrastructure.crypto import encrypt_text
     from database.repositories.settings_repository import SettingsRepository
     repo = SettingsRepository()
     await repo.set(f"{provider}_api_key", encrypt_text(api_key), user_id, category="ai")
     ai_service.clear_provider_cache(user_id)
 
+    # ✅ اختبار المفتاح تلقائياً
+    await update.message.reply_text("⏳ جاري اختبار المفتاح...")
+    success, test_msg = await ai_service.test(user_id)
+
+    if success:
+        final_msg = f"✅ تم حفظ مفتاح *{provider}* واختباره بنجاح!{format_warning}\n\n{test_msg}"
+    else:
+        final_msg = (
+            f"💾 تم حفظ المفتاح، لكن *الاختبار فشل*:{format_warning}\n\n"
+            f"{test_msg}\n\n"
+            f"تحقق من صحة المفتاح وتفعيله في لوحة تحكم {provider}."
+        )
+
     await update.message.reply_text(
-        "✅ تم حفظ المفتاح بأمان.",
-        reply_markup=get_back_button("ai_menu")
+        final_msg,
+        reply_markup=get_back_button("ai_menu"),
+        parse_mode="Markdown"
     )
     return ConversationHandler.END
 
