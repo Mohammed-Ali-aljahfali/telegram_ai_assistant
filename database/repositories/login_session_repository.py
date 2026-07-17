@@ -14,8 +14,9 @@ from database.connection import get_db
 
 logger = logging.getLogger("auth.login_session_repo")
 
-# صلاحية رمز التحقق الافتراضية بالثواني (Telegram يمنح ~5 دقائق)
-CODE_EXPIRY_SECONDS = 300
+# صلاحية جلسة تسجيل الدخول في قاعدة البيانات (10 دقائق)
+# ملاحظة: Telegram يمنح ~5 دقائق للرمز، لكن نحتفظ بالجلسة أطول لتجنب الحذف المبكر
+CODE_EXPIRY_SECONDS = 600
 
 
 class LoginSessionRepository:

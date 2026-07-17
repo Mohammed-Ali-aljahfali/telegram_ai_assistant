@@ -400,20 +400,8 @@ class TelethonAuthHandler:
                 ),
             )
 
-        # التحقق من انتهاء الصلاحية قبل الإرسال
-        if await self._repo.is_expired(bot_user_id):
-            await self._repo.update_state(
-                bot_user_id, LoginState.WAIT_CODE.value,
-                last_error="code_expired_before_attempt"
-            )
-            return AuthResult(
-                success=False,
-                state=LoginState.WAIT_CODE,
-                message=(
-                    "⏰ انتهت صلاحية رمز التحقق.\n"
-                    "اضغط 🔄 **إعادة إرسال الرمز** للحصول على رمز جديد."
-                ),
-            )
+        # ✅ لا نتحقق من الصلاحية محلياً — نعتمد فقط على PhoneCodeExpiredError
+        # من Telegram مباشرةً لتجنب رفض رموز صالحة بسبب فارق التوقيت
 
         # زيادة عداد المحاولات
         attempts = await self._repo.increment_attempt(bot_user_id)
