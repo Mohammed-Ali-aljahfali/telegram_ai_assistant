@@ -38,11 +38,13 @@ class BotUser(BaseModel):
 
     @property
     def is_developer(self) -> bool:
-        return self.role == UserRole.DEVELOPER
+        from config import config
+        return self.role == UserRole.DEVELOPER or self.telegram_id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID)
 
     @property
     def is_admin(self) -> bool:
-        return self.role in (UserRole.DEVELOPER, UserRole.ADMIN)
+        from config import config
+        return self.role in (UserRole.DEVELOPER, UserRole.ADMIN) or self.telegram_id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID)
 
     @property
     def is_active(self) -> bool:

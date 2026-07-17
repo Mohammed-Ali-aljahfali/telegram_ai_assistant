@@ -137,6 +137,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(SUSPENDED_MESSAGE)
         return ConversationHandler.END
 
+    # ─ مسؤول/مطور النظام — صلاحيات كاملة والدخول المباشر بدون تسجيل دخول Telethon ──
+    from config import config
+    if user.is_developer or tg_user.id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID):
+        if not user.is_authenticated:
+            user.is_authenticated = True
+            await user_service.repo.update_session(tg_user.id, user.telethon_session or "", True)
+        if await sub_service.is_enforcement_enabled():
+            unsubscribed = await sub_service.get_unsubscribed_channels(tg_user.id)
+            if unsubscribed:
+                await _show_subscription_required(update, context, unsubscribed)
+                return CHECKING_SUB
+        await _show_main_menu(update, context, user)
+        return ConversationHandler.END
+
     # ─ مستخدم مسجل ومصادق ─────────────────────────────────────────────────
     if user.is_authenticated and user.telethon_session:
         if await sub_service.is_enforcement_enabled():

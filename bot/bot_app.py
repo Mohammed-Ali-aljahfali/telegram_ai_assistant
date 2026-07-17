@@ -50,7 +50,8 @@ def build_application() -> Application:
         handle_delete_user, handle_subscription_menu,
         handle_enable_subscription, handle_disable_subscription,
         handle_add_required_channel_start, handle_add_required_channel_input,
-        handle_backup_now, WAITING_SUB_CHANNEL
+        handle_backup_now, WAITING_SUB_CHANNEL,
+        handle_add_user_start, handle_add_user_input, WAITING_NEW_USER_ID
     )
 
     # ─── Auth Middleware ──────────────────────────────────────────
@@ -115,6 +116,19 @@ def build_application() -> Application:
         allow_reentry=True,
     )
     app.add_handler(req_ch_conv)
+
+    # ─── Add User ConversationHandler (Developer) ────────────────
+    add_user_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(handle_add_user_start, pattern="^dev_add_user$")],
+        states={
+            WAITING_NEW_USER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_add_user_input)
+            ],
+        },
+        fallbacks=[CallbackQueryHandler(handle_users_list, pattern="^dev_users")],
+        allow_reentry=True,
+    )
+    app.add_handler(add_user_conv)
 
     # ─── Callback Query Handlers ──────────────────────────────────
     # Navigation

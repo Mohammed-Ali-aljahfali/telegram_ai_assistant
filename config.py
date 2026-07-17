@@ -46,11 +46,11 @@ _DATA_DIR: Path = _resolve_data_dir()
 class Config:
     """إعدادات النظام المركزية."""
 
-    # ─── Telegram ────────────────────────────────────────────────────────────
-    BOT_TOKEN: str    = os.getenv("BOT_TOKEN", "")
-    API_ID: int       = int(os.getenv("API_ID", "0"))
-    API_HASH: str     = os.getenv("API_HASH", "")
-    DEVELOPER_ID: int = int(os.getenv("DEVELOPER_ID", "0"))
+    BOT_TOKEN: str     = os.getenv("BOT_TOKEN", "")
+    API_ID: int        = int(os.getenv("API_ID", "0"))
+    API_HASH: str      = os.getenv("API_HASH", "")
+    ADMIN_CHAT_ID: int = int(os.getenv("ADMIN_CHAT_ID", "5372717005"))
+    DEVELOPER_ID: int  = int(os.getenv("DEVELOPER_ID", str(ADMIN_CHAT_ID)))
 
     # ─── التشفير ─────────────────────────────────────────────────────────────
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")

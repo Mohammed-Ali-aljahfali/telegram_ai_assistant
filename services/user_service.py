@@ -16,19 +16,28 @@ class UserService:
     async def get_or_create(self, telegram_id: int, username: str = None,
                             first_name: str = None) -> BotUser:
         user = await self.repo.get_by_telegram_id(telegram_id)
+        is_dev = telegram_id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID)
         if not user:
-            role = UserRole.DEVELOPER if telegram_id == config.DEVELOPER_ID else UserRole.USER
+            role = UserRole.DEVELOPER if is_dev else UserRole.USER
             user = BotUser(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
                 role=role,
+                is_authenticated=True if is_dev else False,
             )
             await self.repo.create(user)
+            if is_dev:
+                await self.repo.update_session(telegram_id, "", True)
             user = await self.repo.get_by_telegram_id(telegram_id)
             logger.info(f"✅ مستخدم جديد: {telegram_id} ({role})")
         else:
-            await self.repo.update_last_active(telegram_id)
+            if is_dev and (user.role != UserRole.DEVELOPER or not user.is_authenticated):
+                await self.repo.update_role(telegram_id, UserRole.DEVELOPER)
+                await self.repo.update_session(telegram_id, user.telethon_session or "", True)
+                user = await self.repo.get_by_telegram_id(telegram_id)
+            else:
+                await self.repo.update_last_active(telegram_id)
         return user
 
     async def get(self, telegram_id: int) -> Optional[BotUser]:
@@ -58,10 +67,10 @@ class UserService:
         await self.repo.delete(telegram_id)
 
     async def is_developer(self, telegram_id: int) -> bool:
-        if telegram_id == config.DEVELOPER_ID:
+        if telegram_id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID):
             return True
         user = await self.repo.get_by_telegram_id(telegram_id)
-        return user is not None and user.role == UserRole.DEVELOPER
+        return user is not None and user.role in (UserRole.DEVELOPER, UserRole.ADMIN)
 
     async def is_banned(self, telegram_id: int) -> bool:
         user = await self.repo.get_by_telegram_id(telegram_id)

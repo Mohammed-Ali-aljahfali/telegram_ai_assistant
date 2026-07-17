@@ -29,7 +29,7 @@ PER_PAGE = 10
 
 
 def is_developer(telegram_id: int) -> bool:
-    return telegram_id == config.DEVELOPER_ID
+    return telegram_id in (config.DEVELOPER_ID, config.ADMIN_CHAT_ID)
 
 
 async def handle_developer_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -285,3 +285,64 @@ async def handle_backup_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_back_button("developer_menu"),
         parse_mode="Markdown"
     )
+
+
+# ─── إضافة مستخدم جديد ───────────────────────────────────────────────────────
+
+async def handle_add_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_developer(update.effective_user.id):
+        return ConversationHandler.END
+    await query.edit_message_text(
+        "➕ *إضافة مستخدم جديد إلى البوت*\n\n"
+        "أرسل **Telegram ID الرقمي** للمستخدم (مثل: `123456789`):\n"
+        "أو اسم المستخدم المسبوق بـ `@` (مثل: `@username`):",
+        reply_markup=get_back_button("dev_users_list_1"),
+        parse_mode="Markdown"
+    )
+    return WAITING_NEW_USER_ID
+
+
+async def handle_add_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_developer(update.effective_user.id):
+        return ConversationHandler.END
+
+    raw_text = (update.message.text or "").strip()
+    if not raw_text:
+        await update.message.reply_text("❌ يرجى إدخال ID أو اسم مستخدم صحيح.")
+        return WAITING_NEW_USER_ID
+
+    new_id = None
+    username = None
+
+    clean_text = raw_text.replace("https://t.me/", "")
+    if clean_text.startswith("@"):
+        username = clean_text.lstrip("@")
+    elif clean_text.isdigit() or (clean_text.startswith("-") and clean_text[1:].isdigit()):
+        new_id = int(clean_text)
+    else:
+        username = clean_text.lstrip("@")
+
+    if not new_id and not username:
+        await update.message.reply_text(
+            "❌ إدخال غير صالح. أرسل Telegram ID رقمي أو اسم المستخدم (@username).",
+            reply_markup=get_back_button("dev_users_list_1")
+        )
+        return WAITING_NEW_USER_ID
+
+    if new_id:
+        user = await user_service.get_or_create(telegram_id=new_id, username=username)
+        await user_service.update_status(new_id, UserStatus.ACTIVE)
+        await user_service.repo.update_session(new_id, user.telethon_session or "", True)
+        msg_text = f"✅ تم إضافة المستخدم بنجاح!\n\n🆔 Telegram ID: `{new_id}`\n📊 الحالة: `نشط (مُصادق ومفعّل)`"
+    else:
+        msg_text = f"✅ تم حفظ اسم المستخدم `@{username}`.\nسيتم منحه التفعيل الفوري عند أول تفاعل مع البوت."
+
+    await update.message.reply_text(
+        msg_text,
+        reply_markup=get_back_button("dev_users_list_1"),
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
